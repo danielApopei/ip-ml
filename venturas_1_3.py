@@ -1,3 +1,6 @@
+# venturas v1.3 (28 may 2024) - a simple hotel search API
+# using flask & sqlalchemy - connecting to a postgres database
+
 import flask
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
@@ -138,6 +141,11 @@ with app.app_context():
 
 
 def build_response(data):
+    """
+    function that builds a response with the data and disables CORS policy
+    :param data: data to be sent in the response
+    :return: response with the data and CORS disabled
+    """
     response = flask.jsonify(data)
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
@@ -145,6 +153,10 @@ def build_response(data):
 
 @app.route('/search', methods=['GET'])
 def search_location():
+    """
+    function that searches for hotels based on the query parameters
+    :return: list[dict] - list of hotels that match the query parameters
+    """
     hotels_query = Hotel.query
     max_count = request.args.get("max_count")
     search_phrase = request.args.get("search_phrase")
@@ -212,6 +224,10 @@ def search_location():
 
 @app.route('/get_cities', methods=['GET'])
 def get_cities():
+    """
+    function that returns the cities of a country
+    :return: list[dict] - list of cities of a country
+    """
     country_name = request.args.get('country')
     if not country_name:
         return build_response({"error": "Country name is required"}), 400
@@ -225,6 +241,10 @@ def get_cities():
 
 @app.route('/get_countries', methods=['GET'])
 def get_countries():
+    """
+    function that returns the countries
+    :return: list[dict] - list of countries
+    """
     countries = Country.query.all()
     country_list = [country.to_dict() for country in countries]
     return build_response(country_list)
@@ -232,12 +252,20 @@ def get_countries():
 
 @app.route('/get_amenities', methods=['GET'])
 def get_amenities():
+    """
+    function that returns the amenities
+    :return: list[dict] - list of amenities
+    """
     amenities = Amenity.query.all()
     amenity_list = [amenity.to_dict() for amenity in amenities]
     return build_response(amenity_list)
 
 @app.route('/get_history', methods=['GET'])
 def get_history():
+    """
+    function that returns the history of a user
+    :return: list[dict] - list of history of a user
+    """
     user_id = request.args.get('user_id')
     if not user_id:
         return build_response({"error": "user_id is required"}), 400
@@ -249,6 +277,11 @@ def get_history():
 # <id> - id locatie accesata
 @app.route('/location/<id>', methods=['POST'])
 def view_location(id):
+    """
+    function that returns the details of a location
+    :param id: id of the location
+    :return: dict - details of the location (including amenities)
+    """
     user_id = request.args.get('user_id')
     location_id = id
     if not location_id:
@@ -273,10 +306,9 @@ def view_location(id):
 
 
 if __name__ == "__main__":
+    # create the database
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=5000, debug=True)
 
-
-if __name__ == "__main__":
+    # run the app (listen to any ip with 0.0.0.0, open port 5000, enable debug mode)
     app.run(host='0.0.0.0', port=5000, debug=True)
