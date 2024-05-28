@@ -221,19 +221,30 @@ def get_amenities():
     return build_response(amenity_list)
 
 
-@app.route('/view', methods=['POST'])
-def view_location():
+# <id> - id locatie accesata
+@app.route('/location/<id>', methods=['POST'])
+def view_location(id):
     user_id = request.args.get('user_id')
-    location_id = request.args.get('location_id')
+    location_id = id
+    if not location_id:
+        return build_response({"error": "location_id is required"}), 400
+    #user_id - id ul user ului care acceseaza locatia
+    if user_id:
+        history = History(user_id=user_id, location_id=location_id)
+        db.session.add(history)
+        db.session.commit()
+    hotels_query = Hotel.query.filter(Hotel.hotel_id == location_id)
+    hotel = hotels_query.first()
+    base_info = hotel.to_dict()
 
-    if not user_id or not location_id:
-        return build_response({"error": "Both user_id and location_id are required"}), 400
-
-    history = History(user_id=user_id, location_id=location_id)
-    db.session.add(history)
-    db.session.commit()
-
-    return build_response({"message": "Location viewed successfully"})
+    hotel_alias = aliased(Hotel)
+    amenity_alias = aliased(Amenity)
+    hotel_amenity_alias = aliased(HotelAmenity)
+    subquery = db.session.query(amenity_alias.name).join(hotel_amenity_alias, amenity_alias.id == hotel_amenity_alias.amenity_id
+                                                         ).filter(hotel_amenity_alias.hotel_id == location_id).subquery()
+    amenities = db.session.query(subquery.c.name).all()
+    base_info['amenities'] = [amenity[0] for amenity in amenities]
+    return build_response(base_info)
 
 
 if __name__ == "__main__":
