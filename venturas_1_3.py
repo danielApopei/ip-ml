@@ -26,13 +26,17 @@ class User(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "email": self.email
+            "email": self.email,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "username": self.username
         }
+
 
 class Hotel(db.Model):
     __tablename__ = 'hotels'
     hotel_id = db.Column(db.Integer, primary_key=True)
-    rating = db.Column(db.String(50))
+    rating = db.Column(db.Float)
     address = db.Column(db.String(255))
     name = db.Column(db.String(255))
     description = db.Column(db.String(255))
@@ -83,7 +87,7 @@ class Amenity(db.Model):
 
 class HotelAmenity(db.Model):
     __tablename__ = 'hotels_amenities'
-    hotel_id = db.Column(db.Integer, db.ForeignKey('locations2.hotel_id'), primary_key=True)
+    hotel_id = db.Column(db.Integer, db.ForeignKey('hotels.hotel_id'), primary_key=True)
     amenity_id = db.Column(db.Integer, db.ForeignKey('amenities.id'), primary_key=True)
 
 
@@ -129,7 +133,6 @@ class History(db.Model):
         }
 
 
-
 with app.app_context():
     db.create_all()
 
@@ -148,16 +151,19 @@ def search_location():
     amenities = request.args.get("amenities")
     cities = request.args.get("cities")
     countries = request.args.get("countries")
-    # min_rating = request.args.get("min_rating")
-    min_rating_location = request.args.get("min_rating_location")
-    min_rating_sleep = request.args.get("min_rating_sleep")
-    min_rating_rooms = request.args.get("min_rating_rooms")
-    min_rating_service = request.args.get("min_rating_service")
-    min_rating_value = request.args.get("min_rating_value")
-    min_rating_cleanliness = request.args.get("min_rating_cleanliness")
+    fuzzy_level = request.args.get("fuzzy_level", type=float)
+    if fuzzy_level is None:
+        fuzzy_level = 75
+    min_rating = request.args.get("min_rating", type=float)
+    min_rating_location = request.args.get("min_rating_location", type=float)
+    min_rating_sleep = request.args.get("min_rating_sleep", type=float)
+    min_rating_rooms = request.args.get("min_rating_rooms", type=float)
+    min_rating_service = request.args.get("min_rating_service", type=float)
+    min_rating_value = request.args.get("min_rating_value", type=float)
+    min_rating_cleanliness = request.args.get("min_rating_cleanliness", type=float)
     if search_phrase:
         all_hotels = [hotel.name for hotel in Hotel.query.all()]
-        best_match = process.extractBests(search_phrase, all_hotels, score_cutoff=80, limit=100)
+        best_match = process.extractBests(search_phrase, all_hotels, scorer=process.fuzz.partial_ratio, score_cutoff=fuzzy_level, limit=100)
         best_names = [match[0] for match in best_match]
         hotels_query = hotels_query.filter(Hotel.name.in_(best_names))
     if amenities:
@@ -183,6 +189,8 @@ def search_location():
         country_list = [country.strip() for country in countries.split(',')]
         country_subquery = db.session.query(City.id).join(Country).filter(Country.name.in_(country_list)).subquery()
         hotels_query = hotels_query.filter(Hotel.city_id.in_(country_subquery))
+    if min_rating:
+        hotels_query = hotels_query.filter(Hotel.rating >= min_rating)
     if min_rating_location:
         hotels_query = hotels_query.filter(Hotel.rating_location >= min_rating_location)
     if min_rating_sleep:
