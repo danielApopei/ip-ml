@@ -3,6 +3,7 @@ from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import aliased
 from sqlalchemy import func
+from fuzzywuzzy import process
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = ('postgresql://postgres:assword123@'
@@ -128,7 +129,10 @@ def search_location():
     cities = request.args.get("cities")
     countries = request.args.get("countries")
     if search_phrase:
-        hotels_query = hotels_query.filter(Hotel.name.ilike(f'%{search_phrase}%'))
+        all_hotels = [hotel.name for hotel in Hotel.query.all()]
+        best_match = process.extractBests(search_phrase, all_hotels, score_cutoff=80, limit=100)
+        best_names = [match[0] for match in best_match]
+        hotels_query = hotels_query.filter(Hotel.name.in_(best_names))
     if amenities:
         amenity_list = [amenity.strip() for amenity in amenities.split(',')]
         hotel_alias = aliased(Hotel)
