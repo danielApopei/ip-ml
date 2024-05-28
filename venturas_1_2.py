@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import aliased
 from sqlalchemy import func
 from fuzzywuzzy import process
+from sqlalchemy.ext.hybrid import hybrid_property
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = ('postgresql://postgres:assword123@'
@@ -24,7 +25,6 @@ class Account(db.Model):
             "id": self.id,
             "email": self.email
         }
-
 
 class Hotel(db.Model):
     __tablename__ = 'hotels'
@@ -128,6 +128,13 @@ def search_location():
     amenities = request.args.get("amenities")
     cities = request.args.get("cities")
     countries = request.args.get("countries")
+    # min_rating = request.args.get("min_rating")
+    min_rating_location = request.args.get("min_rating_location")
+    min_rating_sleep = request.args.get("min_rating_sleep")
+    min_rating_rooms = request.args.get("min_rating_rooms")
+    min_rating_service = request.args.get("min_rating_service")
+    min_rating_value = request.args.get("min_rating_value")
+    min_rating_cleanliness = request.args.get("min_rating_cleanliness")
     if search_phrase:
         all_hotels = [hotel.name for hotel in Hotel.query.all()]
         best_match = process.extractBests(search_phrase, all_hotels, score_cutoff=80, limit=100)
@@ -156,6 +163,18 @@ def search_location():
         country_list = [country.strip() for country in countries.split(',')]
         country_subquery = db.session.query(City.id).join(Country).filter(Country.name.in_(country_list)).subquery()
         hotels_query = hotels_query.filter(Hotel.city_id.in_(country_subquery))
+    if min_rating_location:
+        hotels_query = hotels_query.filter(Hotel.rating_location >= min_rating_location)
+    if min_rating_sleep:
+        hotels_query = hotels_query.filter(Hotel.rating_sleep >= min_rating_sleep)
+    if min_rating_rooms:
+        hotels_query = hotels_query.filter(Hotel.rating_rooms >= min_rating_rooms)
+    if min_rating_service:
+        hotels_query = hotels_query.filter(Hotel.rating_service >= min_rating_service)
+    if min_rating_value:
+        hotels_query = hotels_query.filter(Hotel.rating_value >= min_rating_value)
+    if min_rating_cleanliness:
+        hotels_query = hotels_query.filter(Hotel.rating_cleanliness >= min_rating_cleanliness)
     if max_count:
         max_count = int(max_count)
         hotels_query = hotels_query.limit(max_count)
