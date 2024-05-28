@@ -120,6 +120,14 @@ class History(db.Model):
     location_id = db.Column(db.Integer, db.ForeignKey('hotels.hotel_id'))
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "location_id": self.location_id,
+            "timestamp": self.timestamp
+        }
+
 
 
 with app.app_context():
@@ -219,6 +227,15 @@ def get_amenities():
     amenities = Amenity.query.all()
     amenity_list = [amenity.to_dict() for amenity in amenities]
     return build_response(amenity_list)
+
+@app.route('/get_history', methods=['GET'])
+def get_history():
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return build_response({"error": "user_id is required"}), 400
+    history = History.query.filter_by(user_id=user_id).all()
+    history_list = [history.to_dict() for history in history]
+    return build_response(history_list)
 
 
 # <id> - id locatie accesata
