@@ -15,10 +15,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 
-class Account(db.Model):
-    __tablename__ = 'accounts'
+class User(db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255))
+    first_name = db.Column(db.String(255))
+    last_name = db.Column(db.String(255))
+    username = db.Column(db.String(255))
 
     def to_dict(self):
         return {
@@ -108,6 +111,15 @@ class Country(db.Model):
             "code": self.code,
             "name": self.name
         }
+
+
+class History(db.Model):
+    __tablename__ = 'history'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    location_id = db.Column(db.Integer, db.ForeignKey('hotels.hotel_id'))
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+
 
 
 with app.app_context():
@@ -211,7 +223,17 @@ def get_amenities():
 
 @app.route('/view', methods=['POST'])
 def view_location():
-    return build_response({"message": "illegal access! deleting all database tables..."})
+    user_id = request.args.get('user_id')
+    location_id = request.args.get('location_id')
+
+    if not user_id or not location_id:
+        return build_response({"error": "Both user_id and location_id are required"}), 400
+
+    history = History(user_id=user_id, location_id=location_id)
+    db.session.add(history)
+    db.session.commit()
+
+    return build_response({"message": "Location viewed successfully"})
 
 
 if __name__ == "__main__":
