@@ -142,6 +142,22 @@ class History(db.Model):
         }
 
 
+class SearchHistory(db.Model):
+    __tablename__ = 'search_history'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    search_phrase = db.Column(db.String(255))
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "search_phrase": self.search_phrase,
+            "timestamp": self.timestamp
+        }
+
+
 with app.app_context():
     db.create_all()
 
@@ -157,21 +173,20 @@ def build_response(data):
     return response
 
 
-@app.route('/search', methods=['GET'])
+@app.route('/search', methods=['POST'])
 def search_location():
     """
     function that searches for hotels based on the query parameters
     :return: list[dict] - list of hotels that match the query parameters
     """
     hotels_query = Hotel.query
+    user_id = request.args.get("user_id")
     max_count = request.args.get("max_count")
     search_phrase = request.args.get("search_phrase")
     amenities = request.args.get("amenities")
     cities = request.args.get("cities")
     countries = request.args.get("countries")
     fuzzy_level = request.args.get("fuzzy_level", type=float)
-    if fuzzy_level is None:
-        fuzzy_level = 75
     min_rating = request.args.get("min_rating", type=float)
     min_rating_location = request.args.get("min_rating_location", type=float)
     min_rating_sleep = request.args.get("min_rating_sleep", type=float)
@@ -179,6 +194,12 @@ def search_location():
     min_rating_service = request.args.get("min_rating_service", type=float)
     min_rating_value = request.args.get("min_rating_value", type=float)
     min_rating_cleanliness = request.args.get("min_rating_cleanliness", type=float)
+    if user_id and search_phrase:
+        search_history = SearchHistory(user_id=user_id, search_phrase=search_phrase, timestamp=db.func.current_timestamp())
+        db.session.add(search_history)
+        db.session.commit() 
+    if fuzzy_level is None:
+        fuzzy_level = 75
     if search_phrase:
         all_hotels = [hotel.name for hotel in Hotel.query.all()]
         best_match = process.extractBests(search_phrase, all_hotels, scorer=process.fuzz.partial_ratio, score_cutoff=fuzzy_level, limit=100)
