@@ -313,6 +313,7 @@ def get_amenities():
     amenity_list = [amenity.to_dict() for amenity in amenities]
     return build_response(amenity_list)
 
+
 @app.route('/get_history', methods=['GET'])
 def get_history():
     """
@@ -336,12 +337,13 @@ def view_location(id):
     :return: dict - details of the location (including amenities)
     """
     user_id = request.args.get('user_id')
-    location_id = id
+
+    location_id = int(id)
     if not location_id:
         return build_response({"error": "location_id is required"}), 400
     #user_id - id ul user ului care acceseaza locatia
     if user_id:
-        history = History(user_id=user_id, location_id=location_id)
+        history = History(user_id=user_id, location_id=location_id, timestamp=db.func.current_timestamp())
         db.session.add(history)
         db.session.commit()
     hotels_query = Hotel.query.filter(Hotel.hotel_id == location_id)
