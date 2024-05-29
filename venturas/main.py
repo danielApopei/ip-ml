@@ -5,7 +5,7 @@ import flask
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import aliased
-from sqlalchemy import func
+from sqlalchemy import func, true
 from fuzzywuzzy import process
 from sqlalchemy.ext.hybrid import hybrid_property
 
@@ -194,6 +194,7 @@ def search_location():
     min_rating_service = request.args.get("min_rating_service", type=float)
     min_rating_value = request.args.get("min_rating_value", type=float)
     min_rating_cleanliness = request.args.get("min_rating_cleanliness", type=float)
+
     if user_id and search_phrase:
         search_history = SearchHistory(user_id=user_id, search_phrase=search_phrase, timestamp=db.func.current_timestamp())
         db.session.add(search_history)
@@ -247,6 +248,30 @@ def search_location():
         hotels_query = hotels_query.limit(max_count)
     hotels = hotels_query.all()
     return build_response([hotel.to_dict() for hotel in hotels])
+
+@app.route('/get_search_history', methods=['GET'])
+def get_search_history():
+    """
+    function that returns the search history of a user
+    :return: list[dict] - list of search history of a user
+    """
+    user_id = request.args.get('user_id')
+    search_phrase = request.args.get('search_phrase')
+    max_count = request.args.get('max_count')
+
+    if not user_id:
+        return build_response({"error": "user_id is required"}), 400
+
+    search_history = SearchHistory.query.filter_by(user_id=user_id)
+    sorted_search_history = []
+
+    if search_phrase is not None and search_phrase != "":
+        search_history = search_history.filter(SearchHistory.search_phrase.ilike(f"%{search_phrase}%"))
+    search_history = search_history.order_by(SearchHistory.timestamp.desc())
+    if max_count is not None:
+        search_history = search_history.limit(max_count)
+    search_history = search_history.all()   
+    return build_response([history.to_dict() for history in search_history])
 
 
 @app.route('/get_cities', methods=['GET'])
