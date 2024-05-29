@@ -173,7 +173,7 @@ def build_response(data):
     return response
 
 
-@app.route('/search', methods=['POST'])
+@app.route('/search', methods=['GET'])
 def search_location():
     """
     function that searches for hotels based on the query parameters
@@ -248,6 +248,7 @@ def search_location():
         hotels_query = hotels_query.limit(max_count)
     hotels = hotels_query.all()
     return build_response([hotel.to_dict() for hotel in hotels])
+
 
 @app.route('/get_search_history', methods=['GET'])
 def get_search_history():
@@ -327,7 +328,7 @@ def get_history():
 
 
 # <id> - id locatie accesata
-@app.route('/location/<id>', methods=['POST'])
+@app.route('/location/<id>', methods=['GET'])
 def view_location(id):
     """
     function that returns the details of a location
