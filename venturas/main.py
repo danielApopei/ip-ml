@@ -7,7 +7,10 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import aliased
 from sqlalchemy import func, true
 from fuzzywuzzy import process
+from sklearn.cluster import KMeans
 from sqlalchemy.ext.hybrid import hybrid_property
+import pandas as pd
+import numpy as np
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = ('postgresql://postgres:assword123@'
@@ -39,7 +42,7 @@ class User(db.Model):
 class Hotel(db.Model):
     __tablename__ = 'hotels'
     hotel_id = db.Column(db.Integer, primary_key=True)
-    rating = db.Column(db.Float)
+    # rating = db.Column(db.Float)
     address = db.Column(db.String(255))
     name = db.Column(db.String(255))
     description = db.Column(db.String(255))
@@ -57,15 +60,15 @@ class Hotel(db.Model):
 
     def to_dict(self):
         return {
-            "hotel_id": self.hotel_id,
-            "rating": self.rating,
+            "hotel_id": int(self.hotel_id),
+            # "rating": self.rating,
             "address": self.address,
             "name": self.name,
             "description": self.description,
             "website_url": self.website_url,
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "city_id": self.city_id,
+            "city_id": int(self.city_id),
             "rating_location": self.rating_location,
             "rating_sleep": self.rating_sleep,
             "rating_rooms": self.rating_rooms,
@@ -179,6 +182,8 @@ def search_location():
     function that searches for hotels based on the query parameters
     :return: list[dict] - list of hotels that match the query parameters
     """
+
+    # filtrare
     hotels_query = Hotel.query
     user_id = request.args.get("user_id")
     max_count = request.args.get("max_count")
@@ -247,6 +252,7 @@ def search_location():
         max_count = int(max_count)
         hotels_query = hotels_query.limit(max_count)
     hotels = hotels_query.all()
+
     return build_response([hotel.to_dict() for hotel in hotels])
 
 
@@ -359,6 +365,63 @@ def view_location(id):
     base_info['amenities'] = [amenity[0] for amenity in amenities]
     return build_response(base_info)
 
+
+@app.route('/recommendation/<id>', methods=['GET'])
+def recommend(id):
+    location_id = int(id)
+    if not location_id:
+        return build_response({"error": "location_id is required"}), 400
+
+    # Fetch all hotels that have none of the ratings as None
+    hotels_query = Hotel.query.filter(Hotel.rating_location.isnot(None),
+                                      Hotel.rating_sleep.isnot(None),
+                                      Hotel.rating_rooms.isnot(None),
+                                      Hotel.rating_service.isnot(None),
+                                      Hotel.rating_value.isnot(None),
+                                      Hotel.rating_cleanliness.isnot(None)).all()
+    hotels_as_dict = {hotel.hotel_id: hotel.to_dict() for hotel in hotels_query}
+
+    # Fetch all amenities for all hotels
+    amenities_query = db.session.query(
+        HotelAmenity.hotel_id,
+        Amenity.name
+    ).join(
+        Amenity, Amenity.id == HotelAmenity.amenity_id
+    ).all()
+
+    # Map amenities to hotels
+    for hotel_id, amenity in amenities_query:
+        if hotel_id in hotels_as_dict:
+            if 'amenities' not in hotels_as_dict[hotel_id]:
+                hotels_as_dict[hotel_id]['amenities'] = []
+            hotels_as_dict[hotel_id]['amenities'].append(amenity)
+
+        # Prepare data for clustering
+        features = ['latitude', 'longitude', 'rating_location', 'rating_sleep', 'rating_rooms', 'rating_service',
+                    'rating_value', 'rating_cleanliness']
+        data = [[hotel[feature] for feature in features] for hotel in hotels_as_dict.values()]
+
+        # Perform K-Means clustering
+        kmeans = KMeans(n_clusters=30)
+        kmeans.fit(data)
+
+        # Assign each hotel to a cluster
+        for i, hotel in enumerate(hotels_as_dict.values()):
+            hotel['cluster'] = kmeans.labels_[i]
+
+        # Filter hotels to only include those in the same cluster as the given location
+        location_cluster = hotels_as_dict[location_id]['cluster']
+        recommended_hotels = [hotel for hotel in hotels_as_dict.values() if hotel['cluster'] == location_cluster]
+        print(recommended_hotels)
+
+        for hotel in recommended_hotels:
+            for key, value in hotel.items():
+                if isinstance(value, np.int32):
+                    hotel[key] = int(value)
+
+        
+
+        return build_response(recommended_hotels)
 
 if __name__ == "__main__":
     # create the database
