@@ -11,11 +11,16 @@ from sklearn.cluster import KMeans
 from sqlalchemy.ext.hybrid import hybrid_property
 import pandas as pd
 import numpy as np
+import jwt
+import bcrypt
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = ('postgresql://postgres:assword123@'
                                          'bd-dev.c9y4wsaswav8.us-east-1.rds.amazonaws.com:5432/BDdev')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+jwt_secret = 'j8Om9X34m88BBUo'
+hashing_salt = '0921dij5asj5xz829'
 
 # setup models
 db = SQLAlchemy(app)
@@ -28,6 +33,10 @@ class User(db.Model):
     first_name = db.Column(db.String(255))
     last_name = db.Column(db.String(255))
     username = db.Column(db.String(255))
+    password = db.Column(db.String(255))
+    enabled = db.Column(db.Boolean, default=False)
+    locked = db.Column(db.Boolean, default=False)
+    is_admin = db.Column(db.Boolean, default=False)
 
     def to_dict(self):
         return {
@@ -35,7 +44,11 @@ class User(db.Model):
             "email": self.email,
             "first_name": self.first_name,
             "last_name": self.last_name,
-            "username": self.username
+            "username": self.username,
+            "password": self.password,
+            "enabled": self.enabled,
+            "locked": self.locked,
+            "is_admin": self.is_admin
         }
 
 
@@ -57,6 +70,7 @@ class Hotel(db.Model):
     rating_value = db.Column(db.Float)
     rating_cleanliness = db.Column(db.Float)
     tripadvisor_price_level = db.Column(db.Integer)
+
 
     def to_dict(self):
         return {
@@ -448,6 +462,87 @@ def recommend(id):
     if max_count:
         recommended_hotels = recommended_hotels[:max_count]
     return build_response(recommended_hotels)
+
+
+@app.route('/register', methods=['POST'])
+def register():
+    """
+    function that registers a user
+    :return: dict - details of the user
+    """
+    email = request.args.get('email')
+    first_name = request.args.get('first_name')
+    last_name = request.args.get('last_name')
+    username = request.args.get('username')
+    password = request.args.get('password')
+
+    if not email or not first_name or not last_name or not username:
+        return build_response({"error": "email, first_name, last_name, and username are required"}), 400
+
+    # hash password using bcrypt
+    password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    user = User(
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        username=username,
+        password=password,
+        enabled=False,
+        locked=False,
+        is_admin=False)
+    db.session.add(user)
+    db.session.commit()
+
+    # generate JWT token with all information
+    payload = {
+        "id": user.id,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "username": user.username,
+        "password": user.password,
+        "enabled": user.enabled,
+        "locked": user.locked,
+        "is_admin": user.is_admin
+    }
+
+    token = jwt.encode(payload, jwt_secret, algorithm="HS256")
+
+    return build_response({"token": token, "user": user.to_dict()})
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.args.get('username')
+    password = request.args.get('password')
+
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+    # get the first user that has same username and the hashed password in database is the same as the hashed password using bcrypt.checkpw
+    user = User.query.filter_by(username=username).first()
+    print("found user with config: ", user.username, user.password)
+    print(type(hashed_password), type(user.password.encode('utf-8')))
+    if user and bcrypt.checkpw(hashed_password, user.password.encode('utf-8')):
+        return build_response({"error": "Invalid username or password"}), 400
+    if not user:
+        return build_response({"error": "Invalid username or password"}), 400
+    # generate JWT token with all information
+    payload = {
+        "id": user.id,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "username": user.username,
+        "password": user.password,
+        "enabled": user.enabled,
+        "locked": user.locked,
+        "is_admin": user.is_admin
+    }
+
+    token = jwt.encode(payload, jwt_secret, algorithm="HS256")
+
+    return build_response({"token": token, "user": user.to_dict()})
 
 
 if __name__ == "__main__":
