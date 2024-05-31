@@ -430,6 +430,7 @@ def recommend(id):
     location_id = int(id)
     if not location_id:
         return build_response({"error": "location_id is required"}), 400
+    max_count = request.args.get('max_count', type=int)
 
     # deserialize recommended_hotels from file hotel_clustering.csv
     df = pd.read_csv('hotel_clustering.csv')
@@ -444,6 +445,8 @@ def recommend(id):
     location_cluster = recommended_hotels[location_id]['cluster']
     recommended_hotels = [hotel for hotel in recommended_hotels if hotel['cluster'] == location_cluster]
 
+    if max_count:
+        recommended_hotels = recommended_hotels[:max_count]
     return build_response(recommended_hotels)
 
 
