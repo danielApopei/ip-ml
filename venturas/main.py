@@ -20,7 +20,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = ('postgresql://postgres:assword123@'
                                          'bd-dev.c9y4wsaswav8.us-east-1.rds.amazonaws.com:5432/BDdev')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-jwt_secret = 'j8Om9X34m88BBUo'
+jwt_secret = 'D1D3F9B194971E3083F88A9858D69A7885344A2833944F48900861718F48D6BD'
 hashing_salt = '0921dij5asj5xz829'
 
 # setup models
