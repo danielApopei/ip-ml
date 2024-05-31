@@ -1,5 +1,6 @@
-# venturas v1.3 (28 may 2024) - a simple hotel search API
+# venturas v1.4 (31 may 2024) - a simple hotel search API
 # using flask & sqlalchemy - connecting to a postgres database
+import re
 
 import flask
 from flask import Flask, request
@@ -178,6 +179,25 @@ class SearchHistory(db.Model):
 with app.app_context():
     db.create_all()
 
+def get_user_id_from_token(token):
+    """
+    function that decodes the user_id from the token
+    :param request: flask request object
+    :return: user_id or error response
+    """
+
+    user_id = None
+
+    if not token:
+        return build_response({"error": "token is required"}), 400
+
+    try:
+        user_id = jwt.decode(token, jwt_secret, algorithms=["HS256"])['id']
+    except:
+        return build_response({"error": "Invalid token"}), 400
+
+    return user_id
+
 
 def build_response(data):
     """
@@ -199,7 +219,6 @@ def search_location():
 
     # filtrare
     hotels_query = Hotel.query
-    user_id = request.args.get("user_id")
     max_count = request.args.get("max_count")
     search_phrase = request.args.get("search_phrase")
     amenities = request.args.get("amenities")
@@ -214,11 +233,15 @@ def search_location():
     min_rating_value = request.args.get("min_rating_value", type=float)
     min_rating_cleanliness = request.args.get("min_rating_cleanliness", type=float)
 
+    token = request.args.get('token')
+    user_id = get_user_id_from_token(token)
+
     if user_id and search_phrase:
         search_history = SearchHistory(user_id=user_id, search_phrase=search_phrase,
                                        timestamp=db.func.current_timestamp())
         db.session.add(search_history)
         db.session.commit()
+
     if fuzzy_level is None:
         fuzzy_level = 75
     if search_phrase:
@@ -278,12 +301,11 @@ def get_search_history():
     function that returns the search history of a user
     :return: list[dict] - list of search history of a user
     """
-    user_id = request.args.get('user_id')
+    token = request.args.get('token')
     search_phrase = request.args.get('search_phrase')
     max_count = request.args.get('max_count')
 
-    if not user_id:
-        return build_response({"error": "user_id is required"}), 400
+    user_id = get_user_id_from_token(token)
 
     search_history = SearchHistory.query.filter_by(user_id=user_id)
     sorted_search_history = []
@@ -294,6 +316,7 @@ def get_search_history():
     if max_count is not None:
         search_history = search_history.limit(max_count)
     search_history = search_history.all()
+
     return build_response([history.to_dict() for history in search_history])
 
 
@@ -342,15 +365,16 @@ def get_history():
     function that returns the history of a user
     :return: list[dict] - list of history of a user
     """
-    user_id = request.args.get('user_id')
-    if not user_id:
-        return build_response({"error": "user_id is required"}), 400
+    token = request.args.get('token')
+
+    user_id = get_user_id_from_token(token)
+
     history = History.query.filter_by(user_id=user_id).all()
     history_list = [history.to_dict() for history in history]
+
     return build_response(history_list)
 
 
-# <id> - id locatie accesata
 @app.route('/location/<id>', methods=['GET'])
 def view_location(id):
     """
@@ -358,7 +382,9 @@ def view_location(id):
     :param id: id of the location
     :return: dict - details of the location (including amenities)
     """
-    user_id = request.args.get('user_id')
+    token = request.args.get('token')
+
+    user_id = get_user_id_from_token(token)
 
     location_id = int(id)
     if not location_id:
@@ -479,6 +505,22 @@ def register():
     if not email or not first_name or not last_name or not username:
         return build_response({"error": "email, first_name, last_name, and username are required"}), 400
 
+    # check if email is regex of email if not return 400
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        return build_response({"error": "Invalid email"}), 400
+
+    # check if username is already in use
+    if User.query.filter_by(username=username).first():
+        return build_response({"error": "Username already in use"}), 400
+
+    # check if email is already in use
+    if User.query.filter_by(email=email).first():
+        return build_response({"error": "Email already in use"}), 400
+
+    # the password must have at least one number in it and also have at least 8 characters
+    if not re.match(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$", password):
+        return build_response({"error": "Password must have at least one number and have at least 8 characters"}), 400
+
     # hash password using bcrypt
     password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
@@ -519,7 +561,6 @@ def login():
 
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-    # get the first user that has same username and the hashed password in database is the same as the hashed password using bcrypt.checkpw
     user = User.query.filter_by(username=username).first()
     print("found user with config: ", user.username, user.password)
     print(type(hashed_password), type(user.password.encode('utf-8')))
@@ -527,6 +568,7 @@ def login():
         return build_response({"error": "Invalid username or password"}), 400
     if not user:
         return build_response({"error": "Invalid username or password"}), 400
+
     # generate JWT token with all information
     payload = {
         "id": user.id,
