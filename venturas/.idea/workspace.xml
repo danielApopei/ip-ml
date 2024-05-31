@@ -5,6 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a8f47460-a121-486d-8967-add351adf6ac" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/venturas.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/venturas.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
@@ -83,6 +85,11 @@
       <workItem from="1716995915520" duration="298000" />
       <workItem from="1717000620253" duration="3713000" />
       <workItem from="1717055051598" duration="5203000" />
+      <workItem from="1717084300713" duration="1132000" />
+      <workItem from="1717085871636" duration="976000" />
+      <workItem from="1717139034368" duration="101000" />
+      <workItem from="1717164085053" duration="8000" />
+      <workItem from="1717164134202" duration="874000" />
     </task>
     <servers />
   </component>
@@ -90,6 +97,6 @@
     <option name="version" value="3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/venturas$venturas.coverage" NAME="venturas Coverage Results" MODIFIED="1717060008570" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/venturas$venturas.coverage" NAME="venturas Coverage Results" MODIFIED="1717164311031" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
   </component>
 </project>

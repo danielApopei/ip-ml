@@ -201,14 +201,16 @@ def search_location():
     min_rating_cleanliness = request.args.get("min_rating_cleanliness", type=float)
 
     if user_id and search_phrase:
-        search_history = SearchHistory(user_id=user_id, search_phrase=search_phrase, timestamp=db.func.current_timestamp())
+        search_history = SearchHistory(user_id=user_id, search_phrase=search_phrase,
+                                       timestamp=db.func.current_timestamp())
         db.session.add(search_history)
-        db.session.commit() 
+        db.session.commit()
     if fuzzy_level is None:
         fuzzy_level = 75
     if search_phrase:
         all_hotels = [hotel.name for hotel in Hotel.query.all()]
-        best_match = process.extractBests(search_phrase, all_hotels, scorer=process.fuzz.partial_ratio, score_cutoff=fuzzy_level, limit=100)
+        best_match = process.extractBests(search_phrase, all_hotels, scorer=process.fuzz.partial_ratio,
+                                          score_cutoff=fuzzy_level, limit=100)
         best_names = [match[0] for match in best_match]
         hotels_query = hotels_query.filter(Hotel.name.in_(best_names))
     if amenities:
@@ -277,7 +279,7 @@ def get_search_history():
     search_history = search_history.order_by(SearchHistory.timestamp.desc())
     if max_count is not None:
         search_history = search_history.limit(max_count)
-    search_history = search_history.all()   
+    search_history = search_history.all()
     return build_response([history.to_dict() for history in search_history])
 
 
@@ -347,7 +349,7 @@ def view_location(id):
     location_id = int(id)
     if not location_id:
         return build_response({"error": "location_id is required"}), 400
-    #user_id - id ul user ului care acceseaza locatia
+    # user_id - id ul user ului care acceseaza locatia
     if user_id:
         history = History(user_id=user_id, location_id=location_id, timestamp=db.func.current_timestamp())
         db.session.add(history)
@@ -359,19 +361,20 @@ def view_location(id):
     hotel_alias = aliased(Hotel)
     amenity_alias = aliased(Amenity)
     hotel_amenity_alias = aliased(HotelAmenity)
-    subquery = db.session.query(amenity_alias.name).join(hotel_amenity_alias, amenity_alias.id == hotel_amenity_alias.amenity_id
-                                                         ).filter(hotel_amenity_alias.hotel_id == location_id).subquery()
+    subquery = db.session.query(amenity_alias.name).join(hotel_amenity_alias,
+                                                         amenity_alias.id == hotel_amenity_alias.amenity_id
+                                                         ).filter(
+        hotel_amenity_alias.hotel_id == location_id).subquery()
     amenities = db.session.query(subquery.c.name).all()
     base_info['amenities'] = [amenity[0] for amenity in amenities]
     return build_response(base_info)
 
 
-@app.route('/recommendation/<id>', methods=['GET'])
-def recommend(id):
-    location_id = int(id)
-    if not location_id:
-        return build_response({"error": "location_id is required"}), 400
-
+@app.route('/update_model', methods=['PUT'])
+def update_model():
+    cluster_count = request.args.get('cluster_count', type=int)
+    if not cluster_count:
+        cluster_count = 30
     # Fetch all hotels that have none of the ratings as None
     hotels_query = Hotel.query.filter(Hotel.rating_location.isnot(None),
                                       Hotel.rating_sleep.isnot(None),
@@ -389,39 +392,60 @@ def recommend(id):
         Amenity, Amenity.id == HotelAmenity.amenity_id
     ).all()
 
-    # Map amenities to hotels
     for hotel_id, amenity in amenities_query:
         if hotel_id in hotels_as_dict:
             if 'amenities' not in hotels_as_dict[hotel_id]:
                 hotels_as_dict[hotel_id]['amenities'] = []
             hotels_as_dict[hotel_id]['amenities'].append(amenity)
 
-        # Prepare data for clustering
-        features = ['latitude', 'longitude', 'rating_location', 'rating_sleep', 'rating_rooms', 'rating_service',
-                    'rating_value', 'rating_cleanliness']
-        data = [[hotel[feature] for feature in features] for hotel in hotels_as_dict.values()]
+    # prepare data for clustering
+    features = ['latitude', 'longitude', 'rating_location', 'rating_sleep', 'rating_rooms', 'rating_service',
+                'rating_value', 'rating_cleanliness']
+    data = [[hotel[feature] for feature in features] for hotel in hotels_as_dict.values()]
 
-        # Perform K-Means clustering
-        kmeans = KMeans(n_clusters=30)
-        kmeans.fit(data)
+    # perform K-Means clustering
+    kmeans = KMeans(n_clusters=cluster_count)
+    kmeans.fit(data)
 
-        # Assign each hotel to a cluster
-        for i, hotel in enumerate(hotels_as_dict.values()):
-            hotel['cluster'] = kmeans.labels_[i]
+    for i, hotel in enumerate(hotels_as_dict.values()):
+        hotel['cluster'] = kmeans.labels_[i]
 
-        # Filter hotels to only include those in the same cluster as the given location
-        location_cluster = hotels_as_dict[location_id]['cluster']
-        recommended_hotels = [hotel for hotel in hotels_as_dict.values() if hotel['cluster'] == location_cluster]
-        print(recommended_hotels)
+    # filter hotels to only include those in the same cluster as the given location
+    recommended_hotels = [hotel for hotel in hotels_as_dict.values()]
 
-        for hotel in recommended_hotels:
-            for key, value in hotel.items():
-                if isinstance(value, np.int32):
-                    hotel[key] = int(value)
+    for hotel in recommended_hotels:
+        for key, value in hotel.items():
+            if isinstance(value, np.int32):
+                hotel[key] = int(value)
 
-        
+    # serialize recommended_hotels and store in file hotel_clustering.csv
+    df = pd.DataFrame(recommended_hotels)
+    df.to_csv('hotel_clustering.csv', index=False)
 
-        return build_response(recommended_hotels)
+    return build_response({"message": "Model updated"})
+
+
+@app.route('/recommend/<id>', methods=['GET'])
+def recommend(id):
+    location_id = int(id)
+    if not location_id:
+        return build_response({"error": "location_id is required"}), 400
+
+    # deserialize recommended_hotels from file hotel_clustering.csv
+    df = pd.read_csv('hotel_clustering.csv')
+    recommended_hotels = df.to_dict('records')
+
+    # make sure that 'amenities' is of type list, not str
+    for hotel in recommended_hotels:
+        if isinstance(hotel['amenities'], str):
+            hotel['amenities'] = hotel['amenities'].replace('[', '').replace(']', '').replace('\'', '').split(', ')
+
+    # only return the hotels from the same cluster as location_id
+    location_cluster = recommended_hotels[location_id]['cluster']
+    recommended_hotels = [hotel for hotel in recommended_hotels if hotel['cluster'] == location_cluster]
+
+    return build_response(recommended_hotels)
+
 
 if __name__ == "__main__":
     # create the database
